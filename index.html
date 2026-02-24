@@ -1,0 +1,362 @@
+<script>
+    // ⚠️ PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE
+    const API_URL = "https://script.google.com/a/macros/nu.edu.pk/s/AKfycbxWB8V8x2eFMd_hucjdC_s819-tML81qh8dbVkCTnP-VTSVvnwaZ-CgT2ZLptPflRwtgA/exec";
+    
+    // --- HELPER TO CALL GOOGLE APPS SCRIPT ---
+    // We use text/plain to bypass strict browser CORS rules on redirect
+    function callBackend(dataPayload) {
+      return fetch(API_URL, {
+        method: "POST",
+        redirect: "follow",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(dataPayload)
+      }).then(response => response.json());
+    }
+
+    var html5Qrcode;
+    var currentUser = "";
+    var isUsbMode = false;
+    var isProcessing = false;
+    var currentFacingMode = "environment";
+    var isTorchOn = false;
+    
+    // OFFLINE VARS
+    var offlineDB = null;
+    var offlineMealName = "";
+
+    const SESSION_KEY = "mess_portal_session_v1";
+    const DB_CACHE_KEY = "mess_db_cache";
+
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    // --- SOUND EFFECTS ---
+    function playTone(type) {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      osc.connect(gainNode); gainNode.connect(audioCtx.destination);
+      const now = audioCtx.currentTime;
+      if (type === "scan") { osc.type = "sine"; osc.frequency.setValueAtTime(1200, now); osc.frequency.exponentialRampToValueAtTime(1800, now + 0.05); gainNode.gain.setValueAtTime(0.3, now); gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.08); osc.start(now); osc.stop(now + 0.08); }
+      else if (type === "success") { osc.type = "sine"; osc.frequency.setValueAtTime(800, now); osc.frequency.exponentialRampToValueAtTime(1200, now + 0.1); gainNode.gain.setValueAtTime(0.5, now); gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.3); osc.start(now); osc.stop(now + 0.3); }
+      else if (type === "error") { osc.type = "sawtooth"; osc.frequency.setValueAtTime(150, now); osc.frequency.linearRampToValueAtTime(100, now + 0.3); gainNode.gain.setValueAtTime(0.5, now); gainNode.gain.linearRampToValueAtTime(0.01, now + 0.3); osc.start(now); osc.stop(now + 0.3); }
+      else if (type === "late") { osc.type = "square"; osc.frequency.setValueAtTime(400, now); osc.frequency.setValueAtTime(400, now + 0.1); gainNode.gain.setValueAtTime(0.1, now); osc.start(now); osc.stop(now + 0.2); }
+    }
+
+    // --- CHECK LOGIN & CACHE ---
+    window.onload = function() { checkSession(); checkOfflineCache(); };
+
+    function checkSession() {
+      var saved = localStorage.getItem(SESSION_KEY);
+      if(saved) {
+        var session = JSON.parse(saved);
+        if((new Date().getTime()) - session.timestamp < 3600000) {
+            currentUser = session.name;
+            document.getElementById("displayStaffName").innerText = currentUser;
+            document.getElementById("login-screen").style.display = "none";
+            setTimeout(function() { startSafeCamera(); }, 500);
+            loadStats(); setInterval(loadStats, 10000);
+        } else { localStorage.removeItem(SESSION_KEY); }
+      }
+    }
+    
+    function checkOfflineCache() {
+       var cached = localStorage.getItem(DB_CACHE_KEY);
+       if(cached) {
+          try {
+             var parsed = JSON.parse(cached);
+             var today = new Date().toDateString();
+             if(parsed.date === today) {
+                offlineDB = parsed.db;
+                offlineMealName = parsed.meal;
+                updateDownloadButton(true, parsed.count, parsed.meal);
+             } else {
+                localStorage.removeItem(DB_CACHE_KEY);
+             }
+          } catch(e) { console.log("Cache Error", e); }
+       }
+    }
+
+    function saveSession(name) { localStorage.setItem(SESSION_KEY, JSON.stringify({ name: name, timestamp: new Date().getTime() })); }
+
+    // 🚀 UPDATED API CALL
+    function attemptLogin() {
+      var staff = document.getElementById("staffLoginSelect").value;
+      var pass = document.getElementById("passwordInput").value;
+      if(!staff || !pass) return;
+      document.querySelector(".login-box button").innerText = "CHECKING...";
+      
+      callBackend({ action: "login", name: staff, password: pass })
+        .then(res => {
+          if(res.success){
+            currentUser = staff; document.getElementById("displayStaffName").innerText = currentUser;
+            document.getElementById("login-screen").style.display = "none"; saveSession(currentUser);
+            setTimeout(function() { startSafeCamera(); }, 500); loadStats(); setInterval(loadStats, 10000);
+          } else { 
+            alert("Incorrect Password"); document.querySelector(".login-box button").innerText = "LOGIN"; 
+          }
+        })
+        .catch(err => { alert("Network Error"); document.querySelector(".login-box button").innerText = "LOGIN"; });
+    }
+    
+    function logout() { if(confirm("Logout?")) { localStorage.removeItem(SESSION_KEY); location.reload(); } }
+
+    // 🚀 UPDATED API CALL
+    function loadStats() {
+      if(!currentUser) return;
+      callBackend({ action: "getStats", staffName: currentUser })
+        .then(data => {
+          if(data.error) return;
+          document.getElementById('dashMeal').innerText = data.meal;
+          document.getElementById('dashTotal').innerText = data.total + " / " + data.booked;
+          document.getElementById('displayCount').innerText = data.total;
+          var list = document.getElementById('hostel-list'); list.innerHTML = "";
+          for (const [h, c] of Object.entries(data.breakdown)) {
+              list.innerHTML += `<div class="stat-row"><span>${h}</span><span>${c}</span></div>`;
+          }
+        }).catch(err => console.log("Stat load error", err));
+    }
+
+    function toggleDashboard() {
+      var d = document.getElementById('dashboard');
+      if(d.style.display === 'flex') { d.style.display='none'; if(html5Qrcode) html5Qrcode.resume(); } else { d.style.display='flex'; if(html5Qrcode) html5Qrcode.pause(); loadStats(); }
+    }
+
+    // --- CAMERA POWER ---
+    function togglePower() {
+        var btn = document.getElementById("pwrBtn");
+        if(html5Qrcode && html5Qrcode.isScanning) {
+            html5Qrcode.stop().then(() => {
+                document.getElementById("reader").innerHTML = "";
+                document.getElementById("cam-status").innerHTML = "Camera Stopped<br>Tap ▶ to Start";
+                btn.innerText = "▶"; btn.className = "action-btn power-btn-off";
+                document.getElementById("zoom-container").style.display = "none";
+            });
+        } else { startSafeCamera(); }
+    }
+
+    function startSafeCamera() {
+      if (isUsbMode) return;
+      var status = document.getElementById("cam-status");
+      status.innerText = "Requesting Camera...";
+      
+      document.getElementById("pwrBtn").innerText = "⏹";
+      document.getElementById("pwrBtn").className = "action-btn power-btn-on";
+      document.getElementById("zoom-container").style.display = "none";
+
+      if(!html5Qrcode) html5Qrcode = new Html5Qrcode("reader");
+
+      const config = { fps: 25, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
+
+      html5Qrcode.start({ facingMode: "environment" }, config, onCameraScan)
+      .then(() => { status.innerText = ""; checkZoomCapability(); })
+      .catch(err => {
+            console.warn("Back cam failed", err);
+            status.innerText = "Back Camera Failed. Trying Front...";
+            html5Qrcode.start({ facingMode: "user" }, config, onCameraScan)
+            .then(() => { status.innerText = ""; })
+            .catch(err2 => { status.innerText = "Camera Error! Check browser permissions."; });
+      });
+    }
+
+    function checkZoomCapability() {
+        setTimeout(() => {
+            try {
+                const capabilities = html5Qrcode.getRunningTrackCapabilities();
+                if (capabilities.zoom) {
+                      const slider = document.getElementById("zoom-slider");
+                      slider.min = capabilities.zoom.min;
+                      slider.max = capabilities.zoom.max;
+                      slider.step = capabilities.zoom.step;
+                      slider.value = capabilities.zoom.min;
+                      document.getElementById("zoom-container").style.display = "flex";
+                }
+            } catch(e) { console.log("Zoom not supported"); }
+        }, 500);
+    }
+
+    function applyZoom(val) { if(html5Qrcode) html5Qrcode.applyVideoConstraints({ advanced: [{ zoom: parseFloat(val) }] }); }
+
+    function switchCamera() {
+      if(html5Qrcode && html5Qrcode.isScanning) {
+          html5Qrcode.stop().then(() => {
+              currentFacingMode = (currentFacingMode === "environment") ? "user" : "environment";
+              startSafeCamera();
+          });
+      }
+    }
+
+    function toggleTorch() {
+       if(!html5Qrcode || !html5Qrcode.isScanning) return;
+       isTorchOn = !isTorchOn;
+       html5Qrcode.applyVideoConstraints({ advanced: [{ torch: isTorchOn }] }).catch(e => alert("No Flash"));
+    }
+
+    function onCameraScan(decodedText) {
+      if (isProcessing) return;
+      if (navigator.vibrate) navigator.vibrate(50);
+      html5Qrcode.pause(); playTone("scan"); showLoadingState(); sendScan(decodedText);
+    }
+
+    // --- USB / MANUAL ---
+    function toggleUsbMode() {
+      var overlay = document.getElementById("usb-overlay");
+      if (!isUsbMode) {
+        isUsbMode = true; overlay.style.display = "flex"; document.getElementById("usbBtn").classList.add("active");
+        if(html5Qrcode && html5Qrcode.isScanning) html5Qrcode.stop(); document.getElementById("usb-input").focus();
+      } else {
+        isUsbMode = false; overlay.style.display = "none"; document.getElementById("usbBtn").classList.remove("active");
+        startSafeCamera();
+      }
+    }
+    
+    document.getElementById("usb-overlay").addEventListener("click", function(){ document.getElementById("usb-input").focus(); });
+    document.getElementById("usb-input").addEventListener("keydown", function(e) {
+      if (e.key === "Enter" && this.value) { showLoadingState(); sendScan(this.value); this.value = ""; }
+    });
+
+    function showLoadingState() {
+      isProcessing = true;
+      var box = document.getElementById("result-box"); box.style.display = "block"; box.className = "searching"; box.innerHTML = "SEARCHING...";
+      if(isUsbMode) { document.getElementById("usb-status").innerText = "SEARCHING DB..."; }
+    }
+
+    // 🚀 UPDATED API CALL
+    function downloadData() {
+      if(!currentUser) { alert("Please Login First"); return; }
+      var btn = document.getElementById("downloadBtn");
+      btn.innerText = "⏳...";
+      
+      callBackend({ action: "getOffline" })
+        .then(res => {
+          if(res.error) {
+            alert(res.error); btn.innerText = "⬇️";
+          } else {
+            offlineDB = res.db; offlineMealName = res.meal;
+            var cacheObj = { date: res.date, meal: res.meal, count: res.count, db: res.db };
+            localStorage.setItem(DB_CACHE_KEY, JSON.stringify(cacheObj));
+            updateDownloadButton(true, res.count, res.meal);
+            alert("✅ Downloaded " + res.count + " students for " + res.meal);
+          }
+        }).catch(err => { alert("Failed to download database."); btn.innerText = "⬇️"; });
+    }
+    
+    function updateDownloadButton(active, count, meal) {
+        var btn = document.getElementById("downloadBtn");
+        if(active) { btn.innerText = "⚡ " + count; btn.style.background = "#e67e22"; } 
+        else { btn.innerText = "⬇️"; btn.style.background = "#27ae60"; }
+    }
+
+    // 🚀 UPDATED API CALL
+    function sendScan(code) {
+      var parts = code.split(",");
+      var rawRoll = "";
+      var scanName = "Student";
+
+      if(parts.length >= 2) {
+         scanName = parts[0];
+         rawRoll = parts[1]; 
+      } else {
+         rawRoll = code;
+      }
+
+      var cleanCode = rawRoll.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+      console.log("Searching for Key:", cleanCode);
+
+      // 🛑 HYBRID MODE: CHECK OFFLINE DB
+      if (offlineDB) {
+          var foundStudent = offlineDB[cleanCode];
+
+          if (foundStudent) {
+              if (foundStudent.scanned) {
+                  showResultUI("repeat", "ALREADY SCANNED", scanName, offlineMealName);
+                  playTone("error");
+              } else {
+                  foundStudent.scanned = true;
+                  if(foundStudent.isLate) {
+                     showResultUI("late", "LATE ENTRY (" + foundStudent.time + ")", foundStudent.name, offlineMealName);
+                     playTone("late");
+                  } else {
+                     showResultUI("allowed", "ALLOWED (OFFLINE)", foundStudent.name, offlineMealName);
+                     playTone("success");
+                  }
+                  // SYNC: Send to background, ignore UI response
+                  callBackend({ action: "scan", code: code, staffName: currentUser });
+              }
+              finishScanCycle();
+              return;
+          } else {
+              showResultUI("denied", "NOT FOUND (OFFLINE)", scanName, offlineMealName);
+              playTone("error");
+              finishScanCycle();
+              return;
+          }
+      }
+
+      // 🌐 ONLINE FALLBACK
+      callBackend({ action: "scan", code: code, staffName: currentUser })
+        .then(res => {
+          if (res.status === "allowed" || res.status === "late") {
+              playTone(res.status === "late" ? "late" : "success");
+          } else {
+              playTone("error");
+          }
+          showResultUI(res.status, res.msg, res.name, res.meal);
+          finishScanCycle();
+        })
+        .catch(err => {
+          showResultUI("denied", "NETWORK ERROR", "Student", "Check Internet");
+          playTone("error");
+          finishScanCycle();
+        });
+    }
+    
+    function showResultUI(status, msg, name, meal) {
+        var box = document.getElementById("result-box");
+        box.style.display = "block"; box.className = status;
+        box.innerHTML = `<div style="font-size:24px; margin-bottom:5px;">${msg}</div><div style="font-size:16px; color:#eee;">${name}</div><div style="font-size:12px; margin-top:5px; text-transform:uppercase;">${meal}</div>`;
+
+        if(isUsbMode) {
+            var usbStatus = document.getElementById("usb-result-text");
+            usbStatus.innerText = msg + " - " + name;
+            usbStatus.style.color = (status === "allowed" || status === "late") ? "#0f0" : "red";
+        }
+    }
+
+    function finishScanCycle() {
+        setTimeout(function() {
+            isProcessing = false;
+            document.getElementById("result-box").style.display = "none";
+            if(isUsbMode) {
+                document.getElementById("usb-result-text").innerText = "";
+                document.getElementById("usb-status").innerText = "READY";
+                document.getElementById("usb-input").value = "";
+                document.getElementById("usb-input").focus();
+            } else {
+                if(html5Qrcode) html5Qrcode.resume();
+            }
+        }, 2500);
+    }
+
+    // 🚀 UPDATED API CALL
+    function openDispatch() {
+      var modal = document.getElementById("dispatch-modal");
+      modal.style.display = "flex";
+      
+      callBackend({ action: "getDispatch" })
+        .then(data => {
+         if(data.error) { alert(data.error); closeDispatch(); return; }
+         document.getElementById("dispDate").innerText = data.date;
+         
+         var html = "";
+         html += `<tr><td style="text-align:left; padding-left:15px;">Main Hostel</td><td>${data.main[0]}</td><td>${data.main[1]}</td><td>${data.main[2]}</td></tr>`;
+         html += `<tr><td style="text-align:left; padding-left:15px;">DHA Hostel</td><td>${data.dha[0]}</td><td>${data.dha[1]}</td><td>${data.dha[2]}</td></tr>`;
+         html += `<tr><td style="text-align:left; padding-left:15px;">Girls Hostel</td><td>${data.girls[0]}</td><td>${data.girls[1]}</td><td>${data.girls[2]}</td></tr>`;
+         html += `<tr class="row-total"><td style="text-align:left; padding-left:15px;">TOTAL</td><td>${data.total[0]}</td><td>${data.total[1]}</td><td>${data.total[2]}</td></tr>`;
+         
+         document.getElementById("dispatchBody").innerHTML = html;
+        }).catch(err => { alert("Failed to load dispatch."); closeDispatch(); });
+    }
+    
+    function closeDispatch() { document.getElementById("dispatch-modal").style.display = "none"; }
+
+  </script>
