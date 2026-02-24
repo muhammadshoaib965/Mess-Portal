@@ -1,9 +1,216 @@
-<script>
-    // ⚠️ PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" type="text/javascript"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Mess Portal</title>
+   
+  <style>
+    /* --- CSS --- */
+    * { box-sizing: border-box; }
+    body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family: 'Segoe UI', sans-serif; background: #ecf0f1; }
+   
+    /* LOGIN SCREEN */
+    #login-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #2c3e50; z-index: 2000; display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; }
+    .login-box { text-align: center; width: 85%; max-width: 320px; }
+    .login-box select, .login-box input { padding: 12px; font-size: 16px; border-radius: 5px; border: none; width: 100%; margin-top: 15px; text-align: center; outline: none; }
+    .login-box button { margin-top: 20px; background: #27ae60; color: white; border: none; padding: 12px; font-size: 16px; border-radius: 5px; cursor: pointer; width: 100%; font-weight: bold; }
+   
+    /* HEADER */
+    .header { height: 65px; background: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 10px; border-bottom: 2px solid #ddd; }
+    .logo-img { height: 45px; width: 45px; object-fit: contain; }
+    .uni-title { text-align: center; flex-grow: 1; padding: 0 5px; }
+    .uni-title h3 { margin: 0; color: #2c3e50; font-size: 11px; font-weight: bold; text-transform: uppercase; line-height: 1.1; }
+    .uni-title span { font-size: 9px; color: #7f8c8d; font-weight: bold; }
+    .header-right { display: flex; align-items: center; gap: 10px; }
+    .logout-btn { background: #c0392b; color: white; border: none; padding: 6px 10px; font-size: 10px; border-radius: 3px; cursor: pointer; white-space: nowrap; }
+   
+    /* CONTROLS */
+    .controls { padding: 8px; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; align-items: center; justify-content: space-between; gap: 4px; overflow-x: auto; }
+    .info-group { display: flex; gap: 5px; flex-grow: 1; min-width: 100px; }
+    .info-badge { background: #e8e8e8; padding: 5px 8px; font-size: 12px; border-radius: 4px; font-weight: bold; color: #333; text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center; }
+    .info-badge span { font-size: 9px; color: #777; font-weight: normal; text-transform: uppercase;}
+   
+    .action-btn { background: #34495e; color: white; border: none; padding: 8px 8px; font-size: 11px; border-radius: 4px; cursor: pointer; white-space: nowrap; }
+    .btn-torch { background: #f1c40f; color: #000; font-size: 14px; width: 35px; }
+    .cam-btn { background: #2980b9; }
+    .stats-btn { background: #8e44ad; }
+    .power-btn-on { background: #e74c3c; font-weight: bold; }
+    .power-btn-off { background: #27ae60; font-weight: bold; }
+    .btn-dispatch { background: #d35400; color: white; }
+    .btn-download { background: #27ae60; color: white; }
+
+    /* CAMERA WRAPPER */
+    .camera-wrapper { width: 100%; height: calc(100% - 110px); background: #000; display: flex; justify-content: center; align-items: center; overflow: hidden; position: relative; }
+    #reader { width: 100%; height: 100%; object-fit: cover; }
+   
+    #cam-status { position: absolute; top: 40%; width: 100%; text-align: center; color: white; font-size: 14px; padding: 20px; z-index: 50; pointer-events: none; }
+   
+    #zoom-container {
+        position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+        width: 80%; max-width: 300px;
+        background: rgba(0, 0, 0, 0.6); padding: 8px 15px; border-radius: 20px;
+        display: none; align-items: center; z-index: 100; backdrop-filter: blur(2px);
+    }
+    #zoom-label { color: #fff; font-size: 12px; margin-right: 10px; font-weight: bold; white-space: nowrap;}
+    #zoom-slider { flex-grow: 1; accent-color: #f1c40f; cursor: pointer; }
+
+    /* RESULTS POPUP */
+    #result-box { position: absolute; bottom: 30px; left: 5%; width: 90%; padding: 15px; border-radius: 10px; color: white; font-weight: bold; text-align: center; display: none; box-shadow: 0 5px 15px rgba(0,0,0,0.3); z-index: 500; }
+    .searching { background: #2980b9; } .allowed { background: #27ae60; } .denied { background: #c0392b; } .late { background: #e67e22; } .repeat { background: #8e44ad; } .repeat-denied { background: #7f8c8d; } .closed { background: #34495e; }
+
+    /* DASHBOARD */
+    #dashboard { position: absolute; top: 65px; left: 0; width: 100%; bottom: 0; background: #ecf0f1; z-index: 1500; display: none; flex-direction: column; padding: 20px; overflow-y: auto; }
+    .stat-card { background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    .stat-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee; }
+    .total-big { font-size: 40px; color: #2c3e50; text-align: center; font-weight: bold; padding: 10px; }
+
+    /* USB / MANUAL MODE */
+    #usb-overlay { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 1500; color: #0f0; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
+    #usb-input { position: absolute; top: -1000px; opacity: 0; }
+   
+    /* DISPATCH MODAL CSS */
+    #dispatch-modal {
+      display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.85); z-index: 2000;
+      justify-content: center; align-items: center;
+    }
+    .dispatch-box {
+      background: white; width: 95%; max-width: 400px; border-radius: 10px; overflow: hidden;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.5); font-size: 14px;
+    }
+    .dispatch-header {
+      background: #2c3e50; color: white; padding: 15px; text-align: center; font-weight: bold;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .dispatch-table { width: 100%; border-collapse: collapse; }
+    .dispatch-table th, .dispatch-table td { padding: 10px; text-align: center; border-bottom: 1px solid #eee; }
+    .dispatch-table th { background: #f8f9fa; color: #555; font-size: 11px; text-transform: uppercase; }
+    .dispatch-table .row-total { font-weight: bold; background: #ecf0f1; color: #d35400; }
+
+  </style>
+</head>
+<body>
+
+  <div id="login-screen">
+    <div class="login-box">
+      <img src="https://upload.wikimedia.org/wikipedia/en/e/e4/National_University_of_Computer_and_Emerging_Sciences_logo.png" width="70" style="margin-bottom:10px;">
+      <h3 style="margin:0;">MESS LOGIN</h3>
+      <select id="staffLoginSelect">
+        <option value="" disabled selected>Select Staff Name</option>
+        <option value="Dr Usman Jamil">Dr Usman Jamil</option>
+        <option value="M Shoaib">M Shoaib</option>
+        <option value="Ilyas Nazir">Ilyas Nazir</option>
+        <option value="Faiza Ashiq">Faiza Ashiq</option>
+        <option value="Ali Hassan">Ali Hassan</option>
+        <option value="M Murtaza">M Murtaza</option>
+      </select>
+      <input type="password" id="passwordInput" placeholder="Password">
+      <button onclick="attemptLogin()">LOGIN</button>
+      <p id="loginError" style="color: #e74c3c; font-size: 12px; margin-top: 10px;"></p>
+    </div>
+  </div>
+
+  <div class="header">
+    <img src="https://upload.wikimedia.org/wikipedia/en/e/e4/National_University_of_Computer_and_Emerging_Sciences_logo.png" class="logo-img">
+    <div class="uni-title">
+      <h3>National University of Computer and Emerging Sciences</h3>
+      <span>MULTAN HOSTELS</span>
+    </div>
+    <div class="header-right">
+       <button class="logout-btn" onclick="logout()">LOGOUT</button>
+       <img src="https://i.ibb.co/23xjnhJv/2-removebg-preview.png" class="logo-img">
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="info-group">
+      <div class="info-badge">
+        <span>Staff</span>
+        <div id="displayStaffName">...</div>
+      </div>
+      <div class="info-badge">
+        <span>My Hostel Scan</span>
+        <div id="displayCount" style="color:#2c3e50; font-size:14px;">0</div>
+      </div>
+    </div>
+    <button class="action-btn power-btn-on" id="pwrBtn" onclick="togglePower()">⏹</button>
+    <button class="action-btn btn-torch" onclick="toggleTorch()">🔦</button>
+    <button class="action-btn cam-btn" onclick="switchCamera()">🔄</button>
+    <button class="action-btn stats-btn" onclick="toggleDashboard()">📊</button>
+   
+    <button class="action-btn btn-dispatch" onclick="openDispatch()">📋</button>
+    <button class="action-btn btn-download" id="downloadBtn" onclick="downloadData()">⬇️</button>
+
+    <button class="action-btn" id="usbBtn" onclick="toggleUsbMode()">💻</button>
+  </div>
+
+  <div class="camera-wrapper">
+    <div id="reader"></div>
+    <div id="cam-status">Initialize Camera...</div>
+   
+    <div id="zoom-container">
+        <span id="zoom-label">ZOOM</span>
+        <input type="range" min="1" max="5" step="0.1" value="1" id="zoom-slider" oninput="applyZoom(this.value)">
+    </div>
+  </div>
+
+  <div id="result-box"></div>
+
+  <div id="dashboard">
+    <h2 style="text-align:center; color:#333; margin:0 0 10px 0;">Live Meal Count</h2>
+    <div style="text-align:center; background:#3498db; color:white; padding:5px; border-radius:20px; width:120px; margin:0 auto 20px auto;" id="dashMeal">...</div>
+    <div class="stat-card">
+      <div style="text-align:center; color:#7f8c8d; font-size:12px;">SCANNED / BOOKED</div>
+      <div class="total-big" id="dashTotal">0 / 0</div>
+    </div>
+    <div class="stat-card">
+      <div style="font-size:14px; font-weight:bold; color:#333; margin-bottom:10px; border-bottom:1px solid #eee; padding-bottom:5px;">ALL HOSTELS BREAKDOWN</div>
+      <div id="hostel-list"><div style="text-align:center; color:#999;">Loading...</div></div>
+    </div>
+    <button onclick="toggleDashboard()" style="width:100%; padding:15px; background:#c0392b; color:white; border:none; margin-top:20px; border-radius:8px; font-weight:bold;">CLOSE STATS</button>
+  </div>
+
+  <div id="usb-overlay" ondblclick="toggleUsbMode()">
+    <h1 style="font-family: monospace; font-size: 30px; text-shadow: 0 0 10px #0f0;">READY TO SCAN</h1>
+    <p style="color:white; font-size: 16px;">Use Scanner Gun</p>
+    <div id="usb-status" style="margin-top:20px; font-size:18px; color:yellow;"></div>
+    <div id="usb-result-text" style="font-size:24px; font-weight:bold; margin-top:10px;"></div>
+    <p style="color:#777; font-size:12px; margin-top:50px;">(Double tap to exit)</p>
+  </div>
+  <input type="text" id="usb-input">
+
+  <div id="dispatch-modal">
+    <div class="dispatch-box">
+      <div class="dispatch-header">
+        <span>KITCHEN DISPATCH (<span id="dispDate">...</span>)</span>
+        <button onclick="closeDispatch()" style="background:none; border:none; color:white; font-size:20px;">&times;</button>
+      </div>
+      <table class="dispatch-table">
+        <thead>
+          <tr>
+            <th style="text-align:left; padding-left:15px;">Hostel</th>
+            <th>Bkfast</th>
+            <th>Lunch</th>
+            <th>Dinner</th>
+          </tr>
+        </thead>
+        <tbody id="dispatchBody">
+          <tr><td colspan="4">Loading...</td></tr>
+        </tbody>
+      </table>
+      <div style="padding:10px; text-align:center;">
+        <button onclick="closeDispatch()" style="width:100%; padding:10px; background:#e74c3c; color:white; border:none; border-radius:5px;">CLOSE</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ⚠️ CRITICAL: PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE
     const API_URL = "https://script.google.com/macros/s/AKfycbxWB8V8x2eFMd_hucjdC_s819-tML81qh8dbVkCTnP-VTSVvnwaZ-CgT2ZLptPflRwtgA/exec";
     
     // --- HELPER TO CALL GOOGLE APPS SCRIPT ---
-    // We use text/plain to bypass strict browser CORS rules on redirect
     function callBackend(dataPayload) {
       return fetch(API_URL, {
         method: "POST",
@@ -78,7 +285,6 @@
 
     function saveSession(name) { localStorage.setItem(SESSION_KEY, JSON.stringify({ name: name, timestamp: new Date().getTime() })); }
 
-    // 🚀 UPDATED API CALL
     function attemptLogin() {
       var staff = document.getElementById("staffLoginSelect").value;
       var pass = document.getElementById("passwordInput").value;
@@ -100,7 +306,6 @@
     
     function logout() { if(confirm("Logout?")) { localStorage.removeItem(SESSION_KEY); location.reload(); } }
 
-    // 🚀 UPDATED API CALL
     function loadStats() {
       if(!currentUser) return;
       callBackend({ action: "getStats", staffName: currentUser })
@@ -220,7 +425,6 @@
       if(isUsbMode) { document.getElementById("usb-status").innerText = "SEARCHING DB..."; }
     }
 
-    // 🚀 UPDATED API CALL
     function downloadData() {
       if(!currentUser) { alert("Please Login First"); return; }
       var btn = document.getElementById("downloadBtn");
@@ -246,7 +450,6 @@
         else { btn.innerText = "⬇️"; btn.style.background = "#27ae60"; }
     }
 
-    // 🚀 UPDATED API CALL
     function sendScan(code) {
       var parts = code.split(",");
       var rawRoll = "";
@@ -337,7 +540,6 @@
         }, 2500);
     }
 
-    // 🚀 UPDATED API CALL
     function openDispatch() {
       var modal = document.getElementById("dispatch-modal");
       modal.style.display = "flex";
@@ -359,5 +561,6 @@
     
     function closeDispatch() { document.getElementById("dispatch-modal").style.display = "none"; }
 
-
   </script>
+</body>
+</html>
