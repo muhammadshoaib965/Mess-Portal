@@ -1,232 +1,566 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sports Inventory Portal</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <script src="https://unpkg.com/html5-qrcode"></script>
+  <base target="_top">
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" type="text/javascript"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Mess Portal</title>
+   
   <style>
-    body { background-color: #f4f7f6; padding-top: 20px; }
-    .card { border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
-    .student-info, .issue-section { display: none; background-color: #e3f2fd; padding: 15px; border-radius: 8px; margin-top: 15px; }
-    .issue-section { background-color: #f8f9fa; border: 1px solid #dee2e6; }
-    #reader { width: 100%; max-width: 400px; margin: 0 auto; overflow: hidden; border-radius: 8px; border: 2px solid #0d6efd; }
-    .cart-table th, .cart-table td { padding: 8px; text-align: center; }
+    /* --- CSS --- */
+    * { box-sizing: border-box; }
+    body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family: 'Segoe UI', sans-serif; background: #ecf0f1; }
+   
+    /* LOGIN SCREEN */
+    #login-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #2c3e50; z-index: 2000; display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; }
+    .login-box { text-align: center; width: 85%; max-width: 320px; }
+    .login-box select, .login-box input { padding: 12px; font-size: 16px; border-radius: 5px; border: none; width: 100%; margin-top: 15px; text-align: center; outline: none; }
+    .login-box button { margin-top: 20px; background: #27ae60; color: white; border: none; padding: 12px; font-size: 16px; border-radius: 5px; cursor: pointer; width: 100%; font-weight: bold; }
+   
+    /* HEADER */
+    .header { height: 65px; background: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 10px; border-bottom: 2px solid #ddd; }
+    .logo-img { height: 45px; width: 45px; object-fit: contain; }
+    .uni-title { text-align: center; flex-grow: 1; padding: 0 5px; }
+    .uni-title h3 { margin: 0; color: #2c3e50; font-size: 11px; font-weight: bold; text-transform: uppercase; line-height: 1.1; }
+    .uni-title span { font-size: 9px; color: #7f8c8d; font-weight: bold; }
+    .header-right { display: flex; align-items: center; gap: 10px; }
+    .logout-btn { background: #c0392b; color: white; border: none; padding: 6px 10px; font-size: 10px; border-radius: 3px; cursor: pointer; white-space: nowrap; }
+   
+    /* CONTROLS */
+    .controls { padding: 8px; background: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; align-items: center; justify-content: space-between; gap: 4px; overflow-x: auto; }
+    .info-group { display: flex; gap: 5px; flex-grow: 1; min-width: 100px; }
+    .info-badge { background: #e8e8e8; padding: 5px 8px; font-size: 12px; border-radius: 4px; font-weight: bold; color: #333; text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center; }
+    .info-badge span { font-size: 9px; color: #777; font-weight: normal; text-transform: uppercase;}
+   
+    .action-btn { background: #34495e; color: white; border: none; padding: 8px 8px; font-size: 11px; border-radius: 4px; cursor: pointer; white-space: nowrap; }
+    .btn-torch { background: #f1c40f; color: #000; font-size: 14px; width: 35px; }
+    .cam-btn { background: #2980b9; }
+    .stats-btn { background: #8e44ad; }
+    .power-btn-on { background: #e74c3c; font-weight: bold; }
+    .power-btn-off { background: #27ae60; font-weight: bold; }
+    .btn-dispatch { background: #d35400; color: white; }
+    .btn-download { background: #27ae60; color: white; }
+
+    /* CAMERA WRAPPER */
+    .camera-wrapper { width: 100%; height: calc(100% - 110px); background: #000; display: flex; justify-content: center; align-items: center; overflow: hidden; position: relative; }
+    #reader { width: 100%; height: 100%; object-fit: cover; }
+   
+    #cam-status { position: absolute; top: 40%; width: 100%; text-align: center; color: white; font-size: 14px; padding: 20px; z-index: 50; pointer-events: none; }
+   
+    #zoom-container {
+        position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+        width: 80%; max-width: 300px;
+        background: rgba(0, 0, 0, 0.6); padding: 8px 15px; border-radius: 20px;
+        display: none; align-items: center; z-index: 100; backdrop-filter: blur(2px);
+    }
+    #zoom-label { color: #fff; font-size: 12px; margin-right: 10px; font-weight: bold; white-space: nowrap;}
+    #zoom-slider { flex-grow: 1; accent-color: #f1c40f; cursor: pointer; }
+
+    /* RESULTS POPUP */
+    #result-box { position: absolute; bottom: 30px; left: 5%; width: 90%; padding: 15px; border-radius: 10px; color: white; font-weight: bold; text-align: center; display: none; box-shadow: 0 5px 15px rgba(0,0,0,0.3); z-index: 500; }
+    .searching { background: #2980b9; } .allowed { background: #27ae60; } .denied { background: #c0392b; } .late { background: #e67e22; } .repeat { background: #8e44ad; } .repeat-denied { background: #7f8c8d; } .closed { background: #34495e; }
+
+    /* DASHBOARD */
+    #dashboard { position: absolute; top: 65px; left: 0; width: 100%; bottom: 0; background: #ecf0f1; z-index: 1500; display: none; flex-direction: column; padding: 20px; overflow-y: auto; }
+    .stat-card { background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    .stat-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee; }
+    .total-big { font-size: 40px; color: #2c3e50; text-align: center; font-weight: bold; padding: 10px; }
+
+    /* USB / MANUAL MODE */
+    #usb-overlay { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 1500; color: #0f0; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
+    #usb-input { position: absolute; top: -1000px; opacity: 0; }
+   
+    /* DISPATCH MODAL CSS */
+    #dispatch-modal {
+      display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.85); z-index: 2000;
+      justify-content: center; align-items: center;
+    }
+    .dispatch-box {
+      background: white; width: 95%; max-width: 400px; border-radius: 10px; overflow: hidden;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.5); font-size: 14px;
+    }
+    .dispatch-header {
+      background: #2c3e50; color: white; padding: 15px; text-align: center; font-weight: bold;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .dispatch-table { width: 100%; border-collapse: collapse; }
+    .dispatch-table th, .dispatch-table td { padding: 10px; text-align: center; border-bottom: 1px solid #eee; }
+    .dispatch-table th { background: #f8f9fa; color: #555; font-size: 11px; text-transform: uppercase; }
+    .dispatch-table .row-total { font-weight: bold; background: #ecf0f1; color: #d35400; }
+
   </style>
 </head>
 <body>
 
-<div class="container">
-  <h2 class="text-center text-primary mb-4">University Sports Inventory</h2>
-
-  <div class="card p-3">
-    <h5 class="card-title text-center mb-3">Live QR Scanner</h5>
-    
-    <div id="reader" class="mb-3"></div>
-    <div class="text-center my-3"><strong>OR</strong></div>
-    
-    <div class="input-group mb-3">
-      <input type="text" id="manualInput" class="form-control" placeholder="e.g. 26M-1234">
-      <button class="btn btn-primary" onclick="processStudentInput()">Search</button>
-    </div>
-    
-    <div id="loading" class="text-center text-secondary" style="display: none;">
-      <div class="spinner-border spinner-border-sm" role="status"></div> Processing...
-    </div>
-  </div>
-
-  <div id="studentProfile" class="card p-3 student-info text-start">
-    <h5 class="text-success mb-3">Student Profile Found</h5>
-    <p><strong>Name:</strong> <span id="sName"></span></p>
-    <p><strong>Roll No:</strong> <span id="sRoll"></span></p>
-    <p><strong>Account Status:</strong> <span id="sStatus" class="badge"></span></p>
-    <hr>
-    <div class="d-flex justify-content-around mt-3">
-      <button class="btn btn-success" onclick="showIssueSection()">Issue Items</button>
-      <button class="btn btn-warning" onclick="alert('Return coming next!')">Return Items</button>
+  <div id="login-screen">
+    <div class="login-box">
+      <img src="https://upload.wikimedia.org/wikipedia/en/e/e4/National_University_of_Computer_and_Emerging_Sciences_logo.png" width="70" style="margin-bottom:10px;">
+      <h3 style="margin:0;">MESS LOGIN</h3>
+      <select id="staffLoginSelect">
+        <option value="" disabled selected>Select Staff Name</option>
+        <option value="Dr Usman Jamil">Dr Usman Jamil</option>
+        <option value="M Shoaib">M Shoaib</option>
+        <option value="Ilyas Nazir">Ilyas Nazir</option>
+        <option value="Faiza Ashiq">Faiza Ashiq</option>
+        <option value="Ali Hassan">Ali Hassan</option>
+        <option value="M Murtaza">M Murtaza</option>
+      </select>
+      <input type="password" id="passwordInput" placeholder="Password">
+      <button onclick="attemptLogin()">LOGIN</button>
+      <p id="loginError" style="color: #e74c3c; font-size: 12px; margin-top: 10px;"></p>
     </div>
   </div>
 
-  <div id="issueSection" class="card p-3 issue-section">
-    <h5 class="mb-3 text-center">Checkout Cart</h5>
-    
-    <div class="row g-2 mb-3">
-      <div class="col-8">
-        <label class="form-label mb-1">Select Item:</label>
-        <input class="form-control" list="inventoryList" id="selectedItem" placeholder="Search item...">
-        <datalist id="inventoryList"></datalist>
+  <div class="header">
+    <img src="https://upload.wikimedia.org/wikipedia/en/e/e4/National_University_of_Computer_and_Emerging_Sciences_logo.png" class="logo-img">
+    <div class="uni-title">
+      <h3>National University of Computer and Emerging Sciences</h3>
+      <span>MULTAN HOSTELS</span>
+    </div>
+    <div class="header-right">
+       <button class="logout-btn" onclick="logout()">LOGOUT</button>
+       <img src="https://i.ibb.co/23xjnhJv/2-removebg-preview.png" class="logo-img">
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="info-group">
+      <div class="info-badge">
+        <span>Staff</span>
+        <div id="displayStaffName">...</div>
       </div>
-      <div class="col-4">
-        <label class="form-label mb-1">Qty:</label>
-        <input type="number" class="form-control" id="selectedQty" value="1" min="1">
+      <div class="info-badge">
+        <span>My Hostel Scan</span>
+        <div id="displayCount" style="color:#2c3e50; font-size:14px;">0</div>
       </div>
     </div>
-    
-    <button class="btn btn-outline-primary w-100 mb-3" onclick="addToCart()">+ Add to List</button>
+    <button class="action-btn power-btn-on" id="pwrBtn" onclick="togglePower()">⏹</button>
+    <button class="action-btn btn-torch" onclick="toggleTorch()">🔦</button>
+    <button class="action-btn cam-btn" onclick="switchCamera()">🔄</button>
+    <button class="action-btn stats-btn" onclick="toggleDashboard()">📊</button>
+   
+    <button class="action-btn btn-dispatch" onclick="openDispatch()">📋</button>
+    <button class="action-btn btn-download" id="downloadBtn" onclick="downloadData()">⬇️</button>
 
-    <table class="table table-bordered table-sm cart-table" id="cartTable" style="display: none;">
-      <thead class="table-light">
-        <tr>
-          <th>Item</th>
-          <th>Qty</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-      <tbody id="cartBody"></tbody>
-    </table>
-    
-    <button class="btn btn-success w-100 mt-2" id="checkoutBtn" style="display: none;" onclick="submitCheckout()">Confirm Checkout</button>
+    <button class="action-btn" id="usbBtn" onclick="toggleUsbMode()">💻</button>
   </div>
-</div>
 
-<script>
-  // PASTE YOUR APPS SCRIPT WEB APP URL HERE
-  const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby2dOuheToKqt3CjGcqmKkU-_g1MrchV_QRxyg-DeI_kYRsWWlzPxaSqF_S4BT7A264_Q/exec";
+  <div class="camera-wrapper">
+    <div id="reader"></div>
+    <div id="cam-status">Initialize Camera...</div>
+   
+    <div id="zoom-container">
+        <span id="zoom-label">ZOOM</span>
+        <input type="range" min="1" max="5" step="0.1" value="1" id="zoom-slider" oninput="applyZoom(this.value)">
+    </div>
+  </div>
 
-  let html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: {width: 250, height: 250} });
-  let cart = []; // Array to hold multiple items
+  <div id="result-box"></div>
 
-  function onScanSuccess(decodedText) {
-    html5QrcodeScanner.pause(true); 
-    document.getElementById("manualInput").value = decodedText;
-    processStudentInput();
-  }
-  html5QrcodeScanner.render(onScanSuccess);
+  <div id="dashboard">
+    <h2 style="text-align:center; color:#333; margin:0 0 10px 0;">Live Meal Count</h2>
+    <div style="text-align:center; background:#3498db; color:white; padding:5px; border-radius:20px; width:120px; margin:0 auto 20px auto;" id="dashMeal">...</div>
+    <div class="stat-card">
+      <div style="text-align:center; color:#7f8c8d; font-size:12px;">SCANNED / BOOKED</div>
+      <div class="total-big" id="dashTotal">0 / 0</div>
+    </div>
+    <div class="stat-card">
+      <div style="font-size:14px; font-weight:bold; color:#333; margin-bottom:10px; border-bottom:1px solid #eee; padding-bottom:5px;">ALL HOSTELS BREAKDOWN</div>
+      <div id="hostel-list"><div style="text-align:center; color:#999;">Loading...</div></div>
+    </div>
+    <button onclick="toggleDashboard()" style="width:100%; padding:15px; background:#c0392b; color:white; border:none; margin-top:20px; border-radius:8px; font-weight:bold;">CLOSE STATS</button>
+  </div>
 
-  // 1. Fetch Student
-  function processStudentInput() {
-    const qrData = document.getElementById("manualInput").value.trim();
-    if (!qrData) return alert("Please enter a roll number.");
+  <div id="usb-overlay" ondblclick="toggleUsbMode()">
+    <h1 style="font-family: monospace; font-size: 30px; text-shadow: 0 0 10px #0f0;">READY TO SCAN</h1>
+    <p style="color:white; font-size: 16px;">Use Scanner Gun</p>
+    <div id="usb-status" style="margin-top:20px; font-size:18px; color:yellow;"></div>
+    <div id="usb-result-text" style="font-size:24px; font-weight:bold; margin-top:10px;"></div>
+    <p style="color:#777; font-size:12px; margin-top:50px;">(Double tap to exit)</p>
+  </div>
+  <input type="text" id="usb-input">
+
+  <div id="dispatch-modal">
+    <div class="dispatch-box">
+      <div class="dispatch-header">
+        <span>KITCHEN DISPATCH (<span id="dispDate">...</span>)</span>
+        <button onclick="closeDispatch()" style="background:none; border:none; color:white; font-size:20px;">&times;</button>
+      </div>
+      <table class="dispatch-table">
+        <thead>
+          <tr>
+            <th style="text-align:left; padding-left:15px;">Hostel</th>
+            <th>Bkfast</th>
+            <th>Lunch</th>
+            <th>Dinner</th>
+          </tr>
+        </thead>
+        <tbody id="dispatchBody">
+          <tr><td colspan="4">Loading...</td></tr>
+        </tbody>
+      </table>
+      <div style="padding:10px; text-align:center;">
+        <button onclick="closeDispatch()" style="width:100%; padding:10px; background:#e74c3c; color:white; border:none; border-radius:5px;">CLOSE</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ⚠️ CRITICAL: PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE
+    const API_URL = "https://script.google.com/macros/s/AKfycbxWB8V8x2eFMd_hucjdC_s819-tML81qh8dbVkCTnP-VTSVvnwaZ-CgT2ZLptPflRwtgA/exec";
     
-    document.getElementById("loading").style.display = "block";
-    document.getElementById("studentProfile").style.display = "none";
-    document.getElementById("issueSection").style.display = "none";
+    // --- HELPER TO CALL GOOGLE APPS SCRIPT ---
+    function callBackend(dataPayload) {
+      return fetch(API_URL, {
+        method: "POST",
+        redirect: "follow",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(dataPayload)
+      }).then(response => response.json());
+    }
 
-    fetch(APPS_SCRIPT_URL + "?action=getStudent&qrData=" + encodeURIComponent(qrData))
-      .then(res => res.json())
-      .then(data => {
-        document.getElementById("loading").style.display = "none";
-        if (data.error) return alert(data.error);
+    var html5Qrcode;
+    var currentUser = "";
+    var isUsbMode = false;
+    var isProcessing = false;
+    var currentFacingMode = "environment";
+    var isTorchOn = false;
+    
+    // OFFLINE VARS
+    var offlineDB = null;
+    var offlineMealName = "";
 
-        document.getElementById("sName").innerText = data.name;
-        document.getElementById("sRoll").innerText = data.rollNo;
-        document.getElementById("sStatus").innerText = data.accountStatus;
-        document.getElementById("sStatus").className = data.accountStatus === "Active" ? "badge bg-success" : "badge bg-danger";
-        document.getElementById("studentProfile").style.display = "block";
-        
-        if (html5QrcodeScanner.getState() === Html5QrcodeScannerState.PAUSED) {
-            setTimeout(() => html5QrcodeScanner.resume(), 3000);
-        }
-      }).catch(err => {
-        document.getElementById("loading").style.display = "none";
-        alert("Database Error.");
+    const SESSION_KEY = "mess_portal_session_v1";
+    const DB_CACHE_KEY = "mess_db_cache";
+
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    // --- SOUND EFFECTS ---
+    function playTone(type) {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      osc.connect(gainNode); gainNode.connect(audioCtx.destination);
+      const now = audioCtx.currentTime;
+      if (type === "scan") { osc.type = "sine"; osc.frequency.setValueAtTime(1200, now); osc.frequency.exponentialRampToValueAtTime(1800, now + 0.05); gainNode.gain.setValueAtTime(0.3, now); gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.08); osc.start(now); osc.stop(now + 0.08); }
+      else if (type === "success") { osc.type = "sine"; osc.frequency.setValueAtTime(800, now); osc.frequency.exponentialRampToValueAtTime(1200, now + 0.1); gainNode.gain.setValueAtTime(0.5, now); gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.3); osc.start(now); osc.stop(now + 0.3); }
+      else if (type === "error") { osc.type = "sawtooth"; osc.frequency.setValueAtTime(150, now); osc.frequency.linearRampToValueAtTime(100, now + 0.3); gainNode.gain.setValueAtTime(0.5, now); gainNode.gain.linearRampToValueAtTime(0.01, now + 0.3); osc.start(now); osc.stop(now + 0.3); }
+      else if (type === "late") { osc.type = "square"; osc.frequency.setValueAtTime(400, now); osc.frequency.setValueAtTime(400, now + 0.1); gainNode.gain.setValueAtTime(0.1, now); osc.start(now); osc.stop(now + 0.2); }
+    }
+
+    // --- CHECK LOGIN & CACHE ---
+    window.onload = function() { checkSession(); checkOfflineCache(); };
+
+    function checkSession() {
+      var saved = localStorage.getItem(SESSION_KEY);
+      if(saved) {
+        var session = JSON.parse(saved);
+        if((new Date().getTime()) - session.timestamp < 3600000) {
+            currentUser = session.name;
+            document.getElementById("displayStaffName").innerText = currentUser;
+            document.getElementById("login-screen").style.display = "none";
+            setTimeout(function() { startSafeCamera(); }, 500);
+            loadStats(); setInterval(loadStats, 10000);
+        } else { localStorage.removeItem(SESSION_KEY); }
+      }
+    }
+    
+    function checkOfflineCache() {
+       var cached = localStorage.getItem(DB_CACHE_KEY);
+       if(cached) {
+          try {
+             var parsed = JSON.parse(cached);
+             var today = new Date().toDateString();
+             if(parsed.date === today) {
+                offlineDB = parsed.db;
+                offlineMealName = parsed.meal;
+                updateDownloadButton(true, parsed.count, parsed.meal);
+             } else {
+                localStorage.removeItem(DB_CACHE_KEY);
+             }
+          } catch(e) { console.log("Cache Error", e); }
+       }
+    }
+
+    function saveSession(name) { localStorage.setItem(SESSION_KEY, JSON.stringify({ name: name, timestamp: new Date().getTime() })); }
+
+    function attemptLogin() {
+      var staff = document.getElementById("staffLoginSelect").value;
+      var pass = document.getElementById("passwordInput").value;
+      if(!staff || !pass) return;
+      document.querySelector(".login-box button").innerText = "CHECKING...";
+      
+      callBackend({ action: "login", name: staff, password: pass })
+        .then(res => {
+          if(res.success){
+            currentUser = staff; document.getElementById("displayStaffName").innerText = currentUser;
+            document.getElementById("login-screen").style.display = "none"; saveSession(currentUser);
+            setTimeout(function() { startSafeCamera(); }, 500); loadStats(); setInterval(loadStats, 10000);
+          } else { 
+            alert("Incorrect Password"); document.querySelector(".login-box button").innerText = "LOGIN"; 
+          }
+        })
+        .catch(err => { alert("Network Error"); document.querySelector(".login-box button").innerText = "LOGIN"; });
+    }
+    
+    function logout() { if(confirm("Logout?")) { localStorage.removeItem(SESSION_KEY); location.reload(); } }
+
+    function loadStats() {
+      if(!currentUser) return;
+      callBackend({ action: "getStats", staffName: currentUser })
+        .then(data => {
+          if(data.error) return;
+          document.getElementById('dashMeal').innerText = data.meal;
+          document.getElementById('dashTotal').innerText = data.total + " / " + data.booked;
+          document.getElementById('displayCount').innerText = data.total;
+          var list = document.getElementById('hostel-list'); list.innerHTML = "";
+          for (const [h, c] of Object.entries(data.breakdown)) {
+              list.innerHTML += `<div class="stat-row"><span>${h}</span><span>${c}</span></div>`;
+          }
+        }).catch(err => console.log("Stat load error", err));
+    }
+
+    function toggleDashboard() {
+      var d = document.getElementById('dashboard');
+      if(d.style.display === 'flex') { d.style.display='none'; if(html5Qrcode) html5Qrcode.resume(); } else { d.style.display='flex'; if(html5Qrcode) html5Qrcode.pause(); loadStats(); }
+    }
+
+    // --- CAMERA POWER ---
+    function togglePower() {
+        var btn = document.getElementById("pwrBtn");
+        if(html5Qrcode && html5Qrcode.isScanning) {
+            html5Qrcode.stop().then(() => {
+                document.getElementById("reader").innerHTML = "";
+                document.getElementById("cam-status").innerHTML = "Camera Stopped<br>Tap ▶ to Start";
+                btn.innerText = "▶"; btn.className = "action-btn power-btn-off";
+                document.getElementById("zoom-container").style.display = "none";
+            });
+        } else { startSafeCamera(); }
+    }
+
+    function startSafeCamera() {
+      if (isUsbMode) return;
+      var status = document.getElementById("cam-status");
+      status.innerText = "Requesting Camera...";
+      
+      document.getElementById("pwrBtn").innerText = "⏹";
+      document.getElementById("pwrBtn").className = "action-btn power-btn-on";
+      document.getElementById("zoom-container").style.display = "none";
+
+      if(!html5Qrcode) html5Qrcode = new Html5Qrcode("reader");
+
+      const config = { fps: 25, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
+
+      html5Qrcode.start({ facingMode: "environment" }, config, onCameraScan)
+      .then(() => { status.innerText = ""; checkZoomCapability(); })
+      .catch(err => {
+            console.warn("Back cam failed", err);
+            status.innerText = "Back Camera Failed. Trying Front...";
+            html5Qrcode.start({ facingMode: "user" }, config, onCameraScan)
+            .then(() => { status.innerText = ""; })
+            .catch(err2 => { status.innerText = "Camera Error! Check browser permissions."; });
       });
-  }
+    }
 
-  // 2. Show Issue Section & Fetch Inventory
-  function showIssueSection() {
-    document.getElementById("issueSection").style.display = "block";
-    document.getElementById("loading").style.display = "block";
-    cart = []; // Reset cart
-    renderCart();
-    
-    fetch(APPS_SCRIPT_URL + "?action=getInventory")
-      .then(res => res.json())
-      .then(data => {
-        document.getElementById("loading").style.display = "none";
-        if (data.success && data.items) {
-          const datalist = document.getElementById("inventoryList");
-          datalist.innerHTML = ""; 
-          data.items.forEach(item => {
-            let option = document.createElement("option");
-            option.value = item;
-            datalist.appendChild(option);
+    function checkZoomCapability() {
+        setTimeout(() => {
+            try {
+                const capabilities = html5Qrcode.getRunningTrackCapabilities();
+                if (capabilities.zoom) {
+                      const slider = document.getElementById("zoom-slider");
+                      slider.min = capabilities.zoom.min;
+                      slider.max = capabilities.zoom.max;
+                      slider.step = capabilities.zoom.step;
+                      slider.value = capabilities.zoom.min;
+                      document.getElementById("zoom-container").style.display = "flex";
+                }
+            } catch(e) { console.log("Zoom not supported"); }
+        }, 500);
+    }
+
+    function applyZoom(val) { if(html5Qrcode) html5Qrcode.applyVideoConstraints({ advanced: [{ zoom: parseFloat(val) }] }); }
+
+    function switchCamera() {
+      if(html5Qrcode && html5Qrcode.isScanning) {
+          html5Qrcode.stop().then(() => {
+              currentFacingMode = (currentFacingMode === "environment") ? "user" : "environment";
+              startSafeCamera();
           });
-        }
-      }).catch(err => {
-        document.getElementById("loading").style.display = "none";
-        alert("Failed to load inventory.");
-      });
-  }
-
-  // 3. Add to Cart Logic
-  function addToCart() {
-    const itemName = document.getElementById("selectedItem").value.trim();
-    const qty = parseInt(document.getElementById("selectedQty").value);
-
-    if (!itemName || qty < 1) return alert("Please select a valid item and quantity.");
-
-    // Check if item is already in cart, if so, just increase quantity
-    const existingItemIndex = cart.findIndex(item => item.itemName === itemName);
-    if (existingItemIndex > -1) {
-      cart[existingItemIndex].qty += qty;
-    } else {
-      cart.push({ itemName: itemName, qty: qty });
+      }
     }
 
-    // Reset inputs
-    document.getElementById("selectedItem").value = "";
-    document.getElementById("selectedQty").value = "1";
-    renderCart();
-  }
+    function toggleTorch() {
+       if(!html5Qrcode || !html5Qrcode.isScanning) return;
+       isTorchOn = !isTorchOn;
+       html5Qrcode.applyVideoConstraints({ advanced: [{ torch: isTorchOn }] }).catch(e => alert("No Flash"));
+    }
 
-  function removeFromCart(index) {
-    cart.splice(index, 1);
-    renderCart();
-  }
+    function onCameraScan(decodedText) {
+      if (isProcessing) return;
+      if (navigator.vibrate) navigator.vibrate(50);
+      html5Qrcode.pause(); playTone("scan"); showLoadingState(); sendScan(decodedText);
+    }
 
-  function renderCart() {
-    const tbody = document.getElementById("cartBody");
-    tbody.innerHTML = "";
+    // --- USB / MANUAL ---
+    function toggleUsbMode() {
+      var overlay = document.getElementById("usb-overlay");
+      if (!isUsbMode) {
+        isUsbMode = true; overlay.style.display = "flex"; document.getElementById("usbBtn").classList.add("active");
+        if(html5Qrcode && html5Qrcode.isScanning) html5Qrcode.stop(); document.getElementById("usb-input").focus();
+      } else {
+        isUsbMode = false; overlay.style.display = "none"; document.getElementById("usbBtn").classList.remove("active");
+        startSafeCamera();
+      }
+    }
     
-    if (cart.length === 0) {
-      document.getElementById("cartTable").style.display = "none";
-      document.getElementById("checkoutBtn").style.display = "none";
-      return;
-    }
-
-    cart.forEach((item, index) => {
-      let tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${item.itemName}</td>
-        <td>${item.qty}</td>
-        <td><button class="btn btn-sm btn-danger" onclick="removeFromCart(${index})">X</button></td>
-      `;
-      tbody.appendChild(tr);
+    document.getElementById("usb-overlay").addEventListener("click", function(){ document.getElementById("usb-input").focus(); });
+    document.getElementById("usb-input").addEventListener("keydown", function(e) {
+      if (e.key === "Enter" && this.value) { showLoadingState(); sendScan(this.value); this.value = ""; }
     });
 
-    document.getElementById("cartTable").style.display = "table";
-    document.getElementById("checkoutBtn").style.display = "block";
-  }
+    function showLoadingState() {
+      isProcessing = true;
+      var box = document.getElementById("result-box"); box.style.display = "block"; box.className = "searching"; box.innerHTML = "SEARCHING...";
+      if(isUsbMode) { document.getElementById("usb-status").innerText = "SEARCHING DB..."; }
+    }
 
-  // 4. Submit the Entire Cart
-  function submitCheckout() {
-    if (cart.length === 0) return alert("Cart is empty.");
+    function downloadData() {
+      if(!currentUser) { alert("Please Login First"); return; }
+      var btn = document.getElementById("downloadBtn");
+      btn.innerText = "⏳...";
+      
+      callBackend({ action: "getOffline" })
+        .then(res => {
+          if(res.error) {
+            alert(res.error); btn.innerText = "⬇️";
+          } else {
+            offlineDB = res.db; offlineMealName = res.meal;
+            var cacheObj = { date: res.date, meal: res.meal, count: res.count, db: res.db };
+            localStorage.setItem(DB_CACHE_KEY, JSON.stringify(cacheObj));
+            updateDownloadButton(true, res.count, res.meal);
+            alert("✅ Downloaded " + res.count + " students for " + res.meal);
+          }
+        }).catch(err => { alert("Failed to download database."); btn.innerText = "⬇️"; });
+    }
     
-    const rollNo = document.getElementById("sRoll").innerText;
-    document.getElementById("loading").style.display = "block";
+    function updateDownloadButton(active, count, meal) {
+        var btn = document.getElementById("downloadBtn");
+        if(active) { btn.innerText = "⚡ " + count; btn.style.background = "#e67e22"; } 
+        else { btn.innerText = "⬇️"; btn.style.background = "#27ae60"; }
+    }
 
-    // Convert the cart array to a JSON string
-    const cartDataString = JSON.stringify(cart);
+    function sendScan(code) {
+      var parts = code.split(",");
+      var rawRoll = "";
+      var scanName = "Student";
 
-    fetch(APPS_SCRIPT_URL + "?action=issueItems&rollNo=" + encodeURIComponent(rollNo) + "&cartData=" + encodeURIComponent(cartDataString))
-      .then(res => res.json())
-      .then(data => {
-        document.getElementById("loading").style.display = "none";
-        if (data.success) {
-          alert("Success! " + data.message);
-          document.getElementById("issueSection").style.display = "none";
-          cart = []; // clear cart
-        } else {
-          alert("Error: " + data.message);
+      if(parts.length >= 2) {
+         scanName = parts[0];
+         rawRoll = parts[1]; 
+      } else {
+         rawRoll = code;
+      }
+
+      var cleanCode = rawRoll.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+      console.log("Searching for Key:", cleanCode);
+
+      // 🛑 HYBRID MODE: CHECK OFFLINE DB
+      if (offlineDB) {
+          var foundStudent = offlineDB[cleanCode];
+
+          if (foundStudent) {
+              if (foundStudent.scanned) {
+                  showResultUI("repeat", "ALREADY SCANNED", scanName, offlineMealName);
+                  playTone("error");
+              } else {
+                  foundStudent.scanned = true;
+                  if(foundStudent.isLate) {
+                     showResultUI("late", "LATE ENTRY (" + foundStudent.time + ")", foundStudent.name, offlineMealName);
+                     playTone("late");
+                  } else {
+                     showResultUI("allowed", "ALLOWED (OFFLINE)", foundStudent.name, offlineMealName);
+                     playTone("success");
+                  }
+                  // SYNC: Send to background, ignore UI response
+                  callBackend({ action: "scan", code: code, staffName: currentUser });
+              }
+              finishScanCycle();
+              return;
+          } else {
+              showResultUI("denied", "NOT FOUND (OFFLINE)", scanName, offlineMealName);
+              playTone("error");
+              finishScanCycle();
+              return;
+          }
+      }
+
+      // 🌐 ONLINE FALLBACK
+      callBackend({ action: "scan", code: code, staffName: currentUser })
+        .then(res => {
+          if (res.status === "allowed" || res.status === "late") {
+              playTone(res.status === "late" ? "late" : "success");
+          } else {
+              playTone("error");
+          }
+          showResultUI(res.status, res.msg, res.name, res.meal);
+          finishScanCycle();
+        })
+        .catch(err => {
+          showResultUI("denied", "NETWORK ERROR", "Student", "Check Internet");
+          playTone("error");
+          finishScanCycle();
+        });
+    }
+    
+    function showResultUI(status, msg, name, meal) {
+        var box = document.getElementById("result-box");
+        box.style.display = "block"; box.className = status;
+        box.innerHTML = `<div style="font-size:24px; margin-bottom:5px;">${msg}</div><div style="font-size:16px; color:#eee;">${name}</div><div style="font-size:12px; margin-top:5px; text-transform:uppercase;">${meal}</div>`;
+
+        if(isUsbMode) {
+            var usbStatus = document.getElementById("usb-result-text");
+            usbStatus.innerText = msg + " - " + name;
+            usbStatus.style.color = (status === "allowed" || status === "late") ? "#0f0" : "red";
         }
-      })
-      .catch(err => {
-        document.getElementById("loading").style.display = "none";
-        alert("Failed to issue items.");
-      });
-  }
-</script>
+    }
+
+    function finishScanCycle() {
+        setTimeout(function() {
+            isProcessing = false;
+            document.getElementById("result-box").style.display = "none";
+            if(isUsbMode) {
+                document.getElementById("usb-result-text").innerText = "";
+                document.getElementById("usb-status").innerText = "READY";
+                document.getElementById("usb-input").value = "";
+                document.getElementById("usb-input").focus();
+            } else {
+                if(html5Qrcode) html5Qrcode.resume();
+            }
+        }, 2500);
+    }
+
+    function openDispatch() {
+      var modal = document.getElementById("dispatch-modal");
+      modal.style.display = "flex";
+      
+      callBackend({ action: "getDispatch" })
+        .then(data => {
+         if(data.error) { alert(data.error); closeDispatch(); return; }
+         document.getElementById("dispDate").innerText = data.date;
+         
+         var html = "";
+         html += `<tr><td style="text-align:left; padding-left:15px;">Main Hostel</td><td>${data.main[0]}</td><td>${data.main[1]}</td><td>${data.main[2]}</td></tr>`;
+         html += `<tr><td style="text-align:left; padding-left:15px;">DHA Hostel</td><td>${data.dha[0]}</td><td>${data.dha[1]}</td><td>${data.dha[2]}</td></tr>`;
+         html += `<tr><td style="text-align:left; padding-left:15px;">Girls Hostel</td><td>${data.girls[0]}</td><td>${data.girls[1]}</td><td>${data.girls[2]}</td></tr>`;
+         html += `<tr class="row-total"><td style="text-align:left; padding-left:15px;">TOTAL</td><td>${data.total[0]}</td><td>${data.total[1]}</td><td>${data.total[2]}</td></tr>`;
+         
+         document.getElementById("dispatchBody").innerHTML = html;
+        }).catch(err => { alert("Failed to load dispatch."); closeDispatch(); });
+    }
+    
+    function closeDispatch() { document.getElementById("dispatch-modal").style.display = "none"; }
+
+  </script>
 </body>
 </html>
