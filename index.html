@@ -100,8 +100,7 @@
       <select id="staffLoginSelect">
         <option value="" disabled selected>Select Staff Name</option>
         <option value="M Shoaib">M Shoaib</option>
-        <option value="Ilyas Nazir">Ilyas Nazir</option>
-        <option value="Ms.Abida">Abida Zarqa</option>
+        <option value="Ms.Abida">Ms. Abida</option>
         <option value="Muzammil">Muzammil</option>
       </select>
       <input type="password" id="passwordInput" placeholder="Password">
@@ -229,7 +228,7 @@
     var offlineDB = null;
     var offlineMealName = "";
 
-    const SESSION_KEY = "mess_portal_session_v1";
+    const SESSION_KEY = "mess_portal_session_v2";
     const DB_CACHE_KEY = "mess_db_cache";
 
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -269,7 +268,7 @@
        if(cached) {
           try {
              var parsed = JSON.parse(cached);
-             var today = new Date().toDateString();
+             var today = getLocalDateKey();
              if(parsed.date === today) {
                 offlineDB = parsed.db;
                 offlineMealName = parsed.meal;
@@ -279,6 +278,11 @@
              }
           } catch(e) { console.log("Cache Error", e); }
        }
+    }
+
+    function getLocalDateKey() {
+      var now = new Date();
+      return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
     }
 
     function saveSession(name) { localStorage.setItem(SESSION_KEY, JSON.stringify({ name: name, timestamp: new Date().getTime() })); }
@@ -461,13 +465,21 @@
       var name = hasName ? parts[0].trim() : "Student";
       var rawRoll = hasName ? parts[1].trim() : trimmed;
       var cleanCode = rawRoll.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-      return { name: name, rawRoll: rawRoll, cleanCode: cleanCode };
+      var valid = /^\d{2}[A-Z]\d{3,}$/.test(cleanCode);
+      return { valid: valid, name: name, rawRoll: rawRoll, cleanCode: cleanCode };
     }
 
     function sendScan(code) {
       var parsed = parseQrCode(code);
       var scanName = parsed.name;
       var cleanCode = parsed.cleanCode;
+
+      if (!parsed.valid) {
+          showResultUI("denied", "INVALID QR CODE", scanName, "");
+          playTone("error");
+          finishScanCycle();
+          return;
+      }
 
       console.log("Searching for Key:", cleanCode);
 
@@ -557,7 +569,6 @@
 
          var html = "";
          html += `<tr><td style="text-align:left; padding-left:15px;">Campus Boys Hostel</td><td>${data.main[0]}</td><td>${data.main[1]}</td><td>${data.main[2]}</td></tr>`;
-         html += `<tr><td style="text-align:left; padding-left:15px;">Mattital Boys Hostel</td><td>${data.dha[0]}</td><td>${data.dha[1]}</td><td>${data.dha[2]}</td></tr>`;
          html += `<tr><td style="text-align:left; padding-left:15px;">Girls Hostel</td><td>${data.girls[0]}</td><td>${data.girls[1]}</td><td>${data.girls[2]}</td></tr>`;
          html += `<tr class="row-total"><td style="text-align:left; padding-left:15px;">TOTAL</td><td>${data.total[0]}</td><td>${data.total[1]}</td><td>${data.total[2]}</td></tr>`;
 
